@@ -12,7 +12,7 @@ mask：在训练过程中随机选取v或s部分，以比率r的方式进行mask
 class SpectralModule(torch.nn.Module):# 光谱维，应该是一维的
     def __init__(self,params):
         super().__init__()
-        self.out_d=params['net'].get('RepSize',64)
+        self.out_d=params['net'].get('mlp_head',64)
         self.layer1=nn.Sequential(collections.OrderedDict([
             ('conv',nn.Conv1d(1,64,3,1,1))
             ,('relu',nn.ReLU())
@@ -39,7 +39,7 @@ class SpectralModule(torch.nn.Module):# 光谱维，应该是一维的
 class VisualModule(nn.Module):
     def __init__(self,params):
         super().__init__()
-        self.out_d=params['net'].get('RepSize',64)
+        self.out_d=params['net'].get('mlp_head',64)
         self.layer1=nn.Sequential(collections.OrderedDict([
             ('conv',nn.Conv2d(1,64,3,1,1))
             ,('relu',nn.ReLU())
@@ -73,3 +73,19 @@ class BaseEncoder(nn.Module):
         h1=self.fs(s)
         h2=self.fv(v)
         return h1,h2
+    
+class XDCL(nn.Module):
+    def __init__(self,params):
+        super().__init__()
+        self.num_class=params['data']['num_classes']
+        self.mlp_head=params['net']['mlp_head']
+        self.backbone=BaseEncoder(params)
+        self.classifier=nn.Sequential(collections.OrderedDict([
+            ('fc',nn.Linear(2*self.mlp_head,self.num_class))
+            ,('relu',nn.ReLU())
+        ]))
+
+    def forward(self,x):
+        h1,h2=self.backbone(x)
+        h3=torch.cat([h1,h2],dim=1)
+        return self.classifier(h3),h1,h2

@@ -401,11 +401,12 @@ class Conv3dTrainer(BaseTrainer):
 class CrossDomainTrainer(BaseTrainer):
     def __init__(self, params) -> None:
         super().__init__(params)
+        self.pretrain_epochs=self.train_params.get("pre_epochs",80)
 
     def real_init(self):
         self.use_unlabel=self.train_params.get('use_unlabel',False)
         self.temperature=self.train_params.get('temperature',10)
-        self.net=cross_domain.BaseEncoder(self.params).to(self.device)
+        self.net=cross_domain.XDCL(self.params).to(self.device)
         self.lr=self.train_params.get('lr',0.001)
         self.weight_decay = self.train_params.get('weight_decay', 5e-3)
         self.optimizer = optim.Adam(self.net.parameters(), lr=self.lr, weight_decay=self.weight_decay,betas=(0.9,0.9))
@@ -415,11 +416,15 @@ class CrossDomainTrainer(BaseTrainer):
         epochs = self.params['train'].get('epochs', 100)
         total_loss = 0
         epoch_avg_loss = utils.AvgrageMeter()
-        for epoch in range(epochs):
+        '''
+        预训练，即对比学习部分第一阶段。对model的classifier进行冻结
+        '''
+        for param in self.net.classifier.parameters():
+            param.requires_grad=False
+        for epoch in range(self.pretrain_epochs):
             self.net.train()
             epoch_avg_loss.reset()
             self.augment['chosen']=random.randint(0,self.params['data']['spectral_size']-1)
-            
             for i, (label_data, real_target) in enumerate(train_loader):
                 data, target= label_data.to(self.device), real_target.to(self.device)
                 '''
@@ -439,6 +444,35 @@ class CrossDomainTrainer(BaseTrainer):
                     outputs = self.net(data, left_data, right_data)
                 else:
                     outputs=self.net(data)
+                loss = self.infoNCE_diag(outputs[1],outputs[2],self.temperature)
+                self.optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.net.parameters(), self.clip)
+                self.optimizer.step()
+                # batch stat
+                total_loss += loss.item()
+                epoch_avg_loss.update(loss.item(), data.shape[0])
+            recorder.append_index_value("epoch_loss", epoch + 1, epoch_avg_loss.get_avg())
+            print('[Epoch: %d]  [epoch_loss: %.5f]  [all_epoch_loss: %.5f] [current_batch_loss: %.5f] [batch_num: %s]' % (epoch + 1,
+                                                                             epoch_avg_loss.get_avg(), 
+                                                                             total_loss / (epoch + 1),
+                                                                             loss.item(), epoch_avg_loss.get_num()))
+        '''
+        第二阶段微调，需要将baseEncoder冻结，只训练MLP部分，用ce
+        '''
+        for param in self.net.classifier.parameters();
+            param.requires_grad=True
+        for param in self.net.backbone.parameters():
+            param.requires_grad=False
+        for epoch in range(epochs):
+            self.net.train()
+            epoch_avg_loss.reset()
+            for i, (label_data, real_target) in enumerate(train_loader):
+                data, target= label_data.to(self.device), real_target.to(self.device)
+                '''
+                不再用unlabel数据，也不需要aug
+                '''
+                outputs=self.net(data)
                 loss = self.get_loss(outputs, target)
                 self.optimizer.zero_grad()
                 loss.backward()
