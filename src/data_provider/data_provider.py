@@ -290,7 +290,7 @@ class HSIDataLoader(object):
                                                 drop_last=False
                                                 )
         unlabel_loader = torch.utils.data.DataLoader(dataset=unlabel,
-                                                batch_size=self.batch_size * 5,
+                                                batch_size=self.batch_size,
                                                 shuffle=False,
                                                 num_workers=0,
                                                 drop_last=False

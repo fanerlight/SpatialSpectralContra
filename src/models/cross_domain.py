@@ -29,12 +29,13 @@ class SpectralModule(torch.nn.Module):# 光谱维，应该是一维的
             ,('relu',nn.ReLU())
         ]))
     
-    def forward(self,x):# 
+    def forward(self,x):
+        x=torch.unsqueeze(x,dim=1)
         h=self.layer1(x)
         h=self.b1(h)
         h=self.b2(h)
         h=self.b3(h)
-        return self.fc(self.flat(h))
+        return self.mlp(h)
     
 class VisualModule(nn.Module):
     def __init__(self,params):
@@ -57,6 +58,7 @@ class VisualModule(nn.Module):
         ]))
 
     def forward(self,x):# 
+        x=torch.unsqueeze(x,dim=1)
         h=self.layer1(x)
         h=self.b1(h)
         h=self.b2(h)
@@ -85,7 +87,7 @@ class XDCL(nn.Module):
             ,('relu',nn.ReLU())
         ]))
 
-    def forward(self,x):
-        h1,h2=self.backbone(x)
+    def forward(self,s,v):
+        h1,h2=self.backbone(s,v)
         h3=torch.cat([h1,h2],dim=1)
         return self.classifier(h3),h1,h2

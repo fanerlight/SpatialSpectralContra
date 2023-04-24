@@ -138,21 +138,21 @@ class BlockMaskAugment(Augment):
     def __init__(self, params) -> None:
         super().__init__(params)
         self.ratio=params['ratio']
-        self.layer_idx=0
         self.chosen=params['chosen']
 
     def generate_mask(self,data):# 这里的data已经进行了降维
         # 按照ratio随机一个mask起始位置
         mask=torch.ones_like(data)
-        len=data.size(1)# 获取batch后一维的数据长度
-        m=math.ceil(len*self.ratio,)
-        if(len(data.size())==2):
-            idx=random.randint(0,len-m-1)
-            mask[:,idx:idx+m]=0
-        elif(len(data.size())==3):
-            idx1=random.randint(0,len-m-1)
-            idx2=random.randint(0,len-m-1)
-            mask[:,idx1:idx1+m,idx2:idx2+m]=0
+        if(self.ratio!=0):
+            length=data.size(1)# 获取batch后一维的数据长度
+            m=math.ceil(length*self.ratio,)
+            if(len(data.size())==2):
+                idx=random.randint(0,length-m-1)
+                mask[:,idx:idx+m]=0
+            elif(len(data.size())==3):
+                idx1=random.randint(0,length-m-1)
+                idx2=random.randint(0,length-m-1)
+                mask[:,idx1:idx1+m,idx2:idx2+m]=0
         return mask
         
     def real_do(self, data) -> Tensor:
@@ -162,7 +162,7 @@ class BlockMaskAugment(Augment):
         left=torch.reshape(left,(b,s))
         left_mask=self.generate_mask(left)
         right=data[:,self.chosen,:,:] # 这个layer怎么来？
-        right=torch.unsqueeze(right,dim=1)
+        right=torch.squeeze(right,dim=1)
         right_mask=self.generate_mask(right)
         return left*left_mask,right*right_mask
 

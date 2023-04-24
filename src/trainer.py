@@ -411,6 +411,29 @@ class CrossDomainTrainer(BaseTrainer):
         self.weight_decay = self.train_params.get('weight_decay', 5e-3)
         self.optimizer = optim.Adam(self.net.parameters(), lr=self.lr, weight_decay=self.weight_decay,betas=(0.9,0.9))
     
+    def test(self, test_loader):
+        """
+        provide test_loader, return test result(only net output)
+        """
+        count = 0
+        self.net.eval()
+        y_pred_test = 0
+        y_test = 0
+        for inputs, labels in test_loader:
+            inputs = inputs.to(self.device)
+            left_data,right_data=do_augment(self.augment,inputs)
+            left_data, right_data = [d.to(self.device) for d in [left_data, right_data]]
+            outputs = self.get_logits(self.net(left_data, right_data))
+            outputs = np.argmax(outputs.detach().cpu().numpy(), axis=1)
+            if count == 0:
+                y_pred_test = outputs
+                y_test = labels
+                count = 1
+            else:
+                y_pred_test = np.concatenate((y_pred_test, outputs))
+                y_test = np.concatenate((y_test, labels))
+        return y_pred_test, y_test
+
     def train(self, train_loader, unlabel_loader,test_loader=None):
         self.temp_unlabel_loader = enumerate(itertools.cycle(unlabel_loader))
         epochs = self.params['train'].get('epochs', 100)
@@ -435,13 +458,14 @@ class CrossDomainTrainer(BaseTrainer):
                 '''
                 if self.use_unlabel:
                     unlabel_data, unlabel_target = self.next_unalbel_data()
+                    # print(data.size(),unlabel_data.size())
                     data=torch.cat([data,unlabel_data],dim=0)
                     target=torch.cat([target,unlabel_target],dim=0)
                 if self.augment:
                 # 这里要做的增强，left变成一维光谱，right变为二维平面。并且对二维平面选择的第几层是每个epoch随机选
                     left_data,right_data=do_augment(self.augment,data)
                     left_data, right_data = [d.to(self.device) for d in [left_data, right_data]]
-                    outputs = self.net(data, left_data, right_data)
+                    outputs = self.net(left_data, right_data)
                 else:
                     outputs=self.net(data)
                 loss = self.infoNCE_diag(outputs[1],outputs[2],self.temperature)
@@ -460,20 +484,28 @@ class CrossDomainTrainer(BaseTrainer):
         '''
         第二阶段微调，需要将baseEncoder冻结，只训练MLP部分，用ce
         '''
-        for param in self.net.classifier.parameters();
+        for param in self.net.classifier.parameters():
             param.requires_grad=True
         for param in self.net.backbone.parameters():
             param.requires_grad=False
+        self.augment['ratio']=0
         for epoch in range(epochs):
             self.net.train()
             epoch_avg_loss.reset()
+            self.augment['chosen']=random.randint(0,self.params['data']['spectral_size']-1)
             for i, (label_data, real_target) in enumerate(train_loader):
                 data, target= label_data.to(self.device), real_target.to(self.device)
                 '''
-                不再用unlabel数据，也不需要aug
+                不再用unlabel数据，但是还需要aug将光谱、空间提取出来
                 '''
-                outputs=self.net(data)
-                loss = self.get_loss(outputs, target)
+                if self.augment:
+                # 这里要做的增强，left变成一维光谱，right变为二维平面。并且对二维平面选择的第几层是每个epoch随机选
+                    left_data,right_data=do_augment(self.augment,data)
+                    left_data, right_data = [d.to(self.device) for d in [left_data, right_data]]
+                    outputs = self.net(left_data, right_data)
+                else:
+                    outputs=self.net(data)
+                loss = self.get_loss(outputs, target,0)
                 self.optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.net.parameters(), self.clip)
@@ -541,7 +573,7 @@ class CrossDomainTrainer(BaseTrainer):
         loss_nce = torch.sum(matrix_log * mask_matrix) / torch.sum(mask_matrix)
         return loss_nce
 
-    def get_loss(self, outputs, target):
+    def get_loss(self, outputs, target,weight_nce=1):
         '''
             A_vecs: [batch, dim]
             B_vecs: [batch, dim]
@@ -550,7 +582,6 @@ class CrossDomainTrainer(BaseTrainer):
         logits, A_vecs, B_vecs = outputs
         # print(A_vecs.shape, B_vecs.shape)
         
-        weight_nce = 1
         loss_nce_1 = self.infoNCE_diag(A_vecs, B_vecs,self.temperature) * weight_nce
         loss_nce_2 = self.infoNCE_diag(B_vecs,A_vecs,self.temperature) * weight_nce
         loss_nce = loss_nce_1+loss_nce_2
