@@ -11,14 +11,14 @@ from einops import rearrange, repeat
 class Conv1dBlock(nn.Module):
     def __init__(self,in_channel,out_channel):
         super().__init__()
-        self.layer=nn.Sequential([
-            ('con1',nn.Conv1d(in_channel,out_channel,3,1,1)
+        self.layer=nn.Sequential(collections.OrderedDict([
+            ('con1',nn.Conv1d(in_channel,out_channel,3,1,1))
              ,('bn1',nn.BatchNorm1d(out_channel))
              ,('relu',nn.ReLU())
              ,('conv2',nn.Conv1d(out_channel,out_channel,3,1,1))
              ,('bn2',nn.BatchNorm1d(out_channel))
-             ,('maxpool',nn.MaxPool1d(3)))
-        ])
+             ,('maxpool',nn.MaxPool1d(3))
+        ]))
     def forward(self,x):
         return self.layer(x)
 

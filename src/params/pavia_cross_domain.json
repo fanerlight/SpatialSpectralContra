@@ -22,7 +22,7 @@
         "temperature":14.28,
         "use_unlabel":true
     },
-    "aug":{
+    "augment":{
         "type":"BlockMask",
         "ratio":0.35
     }

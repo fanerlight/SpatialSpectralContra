@@ -408,7 +408,7 @@ class CrossDomainTrainer(BaseTrainer):
         self.net=cross_domain.BaseEncoder(self.params).to(self.device)
         self.lr=self.train_params.get('lr',0.001)
         self.weight_decay = self.train_params.get('weight_decay', 5e-3)
-        self.optimizer = optim.Adam(self.net.parameters(), lr=self.lr, weight_decay=self.weight_decay,betas=(0.9,))
+        self.optimizer = optim.Adam(self.net.parameters(), lr=self.lr, weight_decay=self.weight_decay,betas=(0.9,0.9))
     
     def train(self, train_loader, unlabel_loader,test_loader=None):
         self.temp_unlabel_loader = enumerate(itertools.cycle(unlabel_loader))
@@ -418,7 +418,8 @@ class CrossDomainTrainer(BaseTrainer):
         for epoch in range(epochs):
             self.net.train()
             epoch_avg_loss.reset()
-            self.augment.set_special(c_idx=random.randint(0,self.params['data']['spectral_size']-1))# 每个epoch会换一个随机的光谱层
+            self.augment['chosen']=random.randint(0,self.params['data']['spectral_size']-1)
+            
             for i, (label_data, real_target) in enumerate(train_loader):
                 data, target= label_data.to(self.device), real_target.to(self.device)
                 '''

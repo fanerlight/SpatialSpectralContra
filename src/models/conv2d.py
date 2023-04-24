@@ -11,13 +11,15 @@ from einops import rearrange, repeat
 
 class Conv2dBlock(torch.nn.Module):
     def __init__(self,in_channel,out_channel):
-        self.layer=nn.Sequential(
+        super().__init__()
+        self.layer=nn.Sequential(collections.OrderedDict(
             [('conv1',nn.Conv2d(in_channel,out_channel,(3,3),(1,1),(1,1)))
              ,('bn1',nn.BatchNorm2d(out_channel))
              ,('relu',nn.ReLU())
              ,('conv2',nn.Conv2d(out_channel,out_channel,(3,3),(1,1),(1,1)))
              ,('bn2',nn.BatchNorm2d(out_channel))
-             ,('maxpool',nn.MaxPool2d((2,2)))]
+             ,('maxpool',nn.MaxPool2d((2,2)))
+             ])
         )
 
     def forward(self,x):
