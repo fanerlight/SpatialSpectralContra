@@ -448,19 +448,14 @@ class CrossDomainTrainer(BaseTrainer):
             self.net.train()
             epoch_avg_loss.reset()
             self.augment['chosen']=random.randint(0,self.params['data']['spectral_size']-1)
-            for i, (label_data, real_target) in enumerate(train_loader):
-                data, target= label_data.to(self.device), real_target.to(self.device)
+            for i, (unlabel_data, _) in enumerate(unlabel_loader):
+                data= unlabel_data.to(self.device)
                 '''
                 label_data、unlabelled_data大小：
                     batch_size channel height width
                 real_target、-1向量大小：
                     batch_size
                 '''
-                if self.use_unlabel:
-                    unlabel_data, unlabel_target = self.next_unalbel_data()
-                    # print(data.size(),unlabel_data.size())
-                    data=torch.cat([data,unlabel_data],dim=0)
-                    target=torch.cat([target,unlabel_target],dim=0)
                 if self.augment:
                 # 这里要做的增强，left变成一维光谱，right变为二维平面。并且对二维平面选择的第几层是每个epoch随机选
                     left_data,right_data=do_augment(self.augment,data)
